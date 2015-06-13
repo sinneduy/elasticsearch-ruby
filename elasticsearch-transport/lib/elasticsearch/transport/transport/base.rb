@@ -193,29 +193,15 @@ module Elasticsearch
 
           rescue *host_unreachable_exceptions => e
             logger.error "[#{e.class}] #{e.message} #{connection.host.inspect}" if logger
-
-            connection.dead!
-
-            if @options[:reload_on_failure] and tries < connections.all.size
-              logger.warn "[#{e.class}] Reloading connections (attempt #{tries} of #{connections.all.size})" if logger
-              reload_connections! and retry
-            end
-
-            if @options[:retry_on_failure]
-              logger.warn "[#{e.class}] Attempt #{tries} connecting to #{connection.host.inspect}" if logger
-              if tries <= max_retries
-                retry
-              else
-                logger.fatal "[#{e.class}] Cannot connect to #{connection.host.inspect} after #{tries} tries" if logger
-                raise e
-              end
-            else
-              raise e
-            end
+            handle_failed_connection
 
           rescue Exception => e
             logger.fatal "[#{e.class}] #{e.message} (#{connection.host.inspect if connection})" if logger
             raise e
+          end
+
+          if response.status.to_i >= 400
+            handle_failed_connection
           end
 
           duration = Time.now-start if logger || tracer
@@ -245,6 +231,27 @@ module Elasticsearch
         #
         def host_unreachable_exceptions
           [Errno::ECONNREFUSED]
+        end
+
+        def handle_failed_connection(connection)
+            connection.dead!
+
+            if @options[:reload_on_failure] and tries < connections.all.size
+              logger.warn "[#{e.class}] Reloading connections (attempt #{tries} of #{connections.all.size})" if logger
+              reload_connections! and retry
+            end
+
+            if @options[:retry_on_failure]
+              logger.warn "[#{e.class}] Attempt #{tries} connecting to #{connection.host.inspect}" if logger
+              if tries <= max_retries
+                retry
+              else
+                logger.fatal "[#{e.class}] Cannot connect to #{connection.host.inspect} after #{tries} tries" if logger
+                raise e
+              end
+            else
+              raise e
+            end
         end
 
         # @abstract A transport implementation must implement this method.
