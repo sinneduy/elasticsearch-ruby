@@ -251,9 +251,6 @@ module Elasticsearch
           [Errno::ECONNREFUSED]
         end
 
-        def handle_failed_connection(connection)
-        end
-
         # @abstract A transport implementation must implement this method.
         #           See {HTTP::Faraday#__build_connections} for an example.
         #
