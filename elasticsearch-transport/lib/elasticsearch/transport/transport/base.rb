@@ -248,7 +248,7 @@ module Elasticsearch
         # @return [Array]
         #
         def host_unreachable_exceptions
-          [Errno::ECONNREFUSED, ServerError]
+          [Errno::ECONNREFUSED]
         end
 
         def handle_failed_connection(connection)
