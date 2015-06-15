@@ -191,18 +191,36 @@ module Elasticsearch
 
             connection.healthy! if connection.failures > 0
 
-          rescue *host_unreachable_exceptions => e
+            if response.status.to_i == 502
+                raise ServerError 
+            end
+          
+          rescue *host_unreachable_exceptions + [ServerError]  => e
             logger.error "[#{e.class}] #{e.message} #{connection.host.inspect}" if logger
-            handle_failed_connection
+            connection.dead!
+
+            if @options[:reload_on_failure] and tries < connections.all.size
+              logger.warn "[#{e.class}] Reloading connections (attempt #{tries} of #{connections.all.size})" if logger
+              reload_connections! and retry
+            end
+
+            if @options[:retry_on_failure]
+              logger.warn "[#{e.class}] Attempt #{tries} connecting to #{connection.host.inspect}" if logger
+              if tries <= max_retries
+                retry
+              else
+                logger.fatal "[#{e.class}] Cannot connect to #{connection.host.inspect} after #{tries} tries" if logger
+                raise e
+              end
+            else
+              raise e
+            end
 
           rescue Exception => e
             logger.fatal "[#{e.class}] #{e.message} (#{connection.host.inspect if connection})" if logger
             raise e
           end
 
-          if response.status.to_i >= 400
-            handle_failed_connection
-          end
 
           duration = Time.now-start if logger || tracer
 
@@ -230,28 +248,10 @@ module Elasticsearch
         # @return [Array]
         #
         def host_unreachable_exceptions
-          [Errno::ECONNREFUSED]
+          [Errno::ECONNREFUSED, ServerError]
         end
 
         def handle_failed_connection(connection)
-            connection.dead!
-
-            if @options[:reload_on_failure] and tries < connections.all.size
-              logger.warn "[#{e.class}] Reloading connections (attempt #{tries} of #{connections.all.size})" if logger
-              reload_connections! and retry
-            end
-
-            if @options[:retry_on_failure]
-              logger.warn "[#{e.class}] Attempt #{tries} connecting to #{connection.host.inspect}" if logger
-              if tries <= max_retries
-                retry
-              else
-                logger.fatal "[#{e.class}] Cannot connect to #{connection.host.inspect} after #{tries} tries" if logger
-                raise e
-              end
-            else
-              raise e
-            end
         end
 
         # @abstract A transport implementation must implement this method.
