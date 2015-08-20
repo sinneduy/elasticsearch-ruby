@@ -32,6 +32,7 @@ module Elasticsearch
       # @see Cluster#stop Cluster.stop
       #
       module Cluster
+        @@network_host    = ENV.fetch('TEST_CLUSTER_NETWORK_HOST', '0.0.0.0')
         @@number_of_nodes = (ENV['TEST_CLUSTER_NODES'] || 2).to_i
         @@default_cluster_name = "elasticsearch-test-#{Socket.gethostname.downcase}"
 
@@ -51,6 +52,7 @@ module Elasticsearch
         # @option arguments [String]  :path_work    Path to the directory with auxiliary files
         # @option arguments [Boolean] :multicast_enabled Whether multicast is enabled (default: true)
         # @option arguments [Integer] :timeout      Timeout when starting the cluster (default: 30)
+        # @option arguments [String]  :network_host The host that nodes will bind on and publish to
         #
         # You can also use environment variables to set these options.
         #
@@ -83,6 +85,7 @@ module Elasticsearch
           arguments[:es_params]         ||= ENV.fetch('TEST_CLUSTER_PARAMS',    '')
           arguments[:multicast_enabled] ||= ENV.fetch('TEST_CLUSTER_MULTICAST', 'true')
           arguments[:timeout]           ||= (ENV.fetch('TEST_CLUSTER_TIMEOUT', 30).to_i)
+          arguments[:network_host]      ||= @@network_host
 
           # Make sure `cluster_name` is not dangerous
           if arguments[:cluster_name] =~ /^[\/\\]?$/
@@ -115,7 +118,7 @@ module Elasticsearch
                 -D es.path.data=#{arguments[:path_data]} \
                 -D es.path.work=#{arguments[:path_work]} \
                 -D es.cluster.routing.allocation.disk.threshold_enabled=false \
-                -D es.network.host=0.0.0.0 \
+                -D es.network.host=#{@@network_host} \
                 -D es.discovery.zen.ping.multicast.enabled=#{arguments[:multicast_enabled]} \
                 -D es.script.inline=on \
                 -D es.script.indexed=on \
@@ -157,9 +160,10 @@ module Elasticsearch
         #
         def stop(arguments={})
           arguments[:port] ||= (ENV['TEST_CLUSTER_PORT'] || 9250).to_i
+          arguments[:network_host] ||= ENV.fetch('TEST_CLUSTER_NETWORK_HOST', @@network_host)
 
           nodes = begin
-            JSON.parse(Net::HTTP.get(URI("http://localhost:#{arguments[:port]}/_nodes/?process")))
+            JSON.parse(Net::HTTP.get(URI("http://#{arguments[:network_host]}:#{arguments[:port]}/_nodes/?process")))
           rescue Exception => e
             STDERR.puts "[!] Exception raised when stopping the cluster: #{e.inspect}".ansi(:red)
             nil
@@ -210,7 +214,7 @@ module Elasticsearch
         #
         def running?(arguments={})
           port         = arguments[:on] || (ENV['TEST_CLUSTER_PORT'] || 9250).to_i
-          cluster_name = arguments[:as] ||  ENV['TEST_CLUSTER_NAME'] || 'elasticsearch_test'
+          cluster_name = arguments[:as] || (ENV.fetch('TEST_CLUSTER_NAME', @@default_cluster_name).chomp)
 
           if cluster_health = Timeout::timeout(0.25) { __get_cluster_health(port) } rescue nil
             return cluster_health['cluster_name']    == cluster_name && \
@@ -245,7 +249,7 @@ module Elasticsearch
         # @return Boolean
         #
         def __wait_for_status(status='green', port=9250, timeout=30)
-          uri = URI("http://localhost:#{port}/_cluster/health?wait_for_status=#{status}")
+          uri = URI("http://#{@@network_host}:#{port}/_cluster/health?wait_for_status=#{status}")
 
           Timeout::timeout(timeout) do
             loop do
@@ -275,9 +279,9 @@ module Elasticsearch
         # @api private
         #
         def __print_cluster_info(port)
-          health = JSON.parse(Net::HTTP.get(URI("http://localhost:#{port}/_cluster/health")))
-          nodes  = JSON.parse(Net::HTTP.get(URI("http://localhost:#{port}/_nodes/process,http")))
-          master = JSON.parse(Net::HTTP.get(URI("http://localhost:#{port}/_cluster/state")))['master_node']
+          health = JSON.parse(Net::HTTP.get(URI("http://#{@@network_host}:#{port}/_cluster/health")))
+          nodes  = JSON.parse(Net::HTTP.get(URI("http://#{@@network_host}:#{port}/_nodes/process,http")))
+          master = JSON.parse(Net::HTTP.get(URI("http://#{@@network_host}:#{port}/_cluster/state")))['master_node']
 
           puts "\n",
                 ('-'*80).ansi(:faint),
@@ -301,7 +305,7 @@ module Elasticsearch
         # @api private
         #
         def __get_cluster_health(port=9250)
-          uri = URI("http://localhost:#{port}/_cluster/health")
+          uri = URI("http://#{@@network_host}:#{port}/_cluster/health")
           if response = Net::HTTP.get(uri) rescue nil
             return JSON.parse(response)
           end

@@ -84,15 +84,41 @@ namespace :elasticsearch do
     Rake::Task['elasticsearch:status'].invoke
     puts '-'*80
 
-    branch = args[:branch] || 'origin/master'
+    gitref = args[:branch] || 'origin/master'
+
     current_branch = `git --git-dir=#{__current__.join('tmp/elasticsearch/.git')} --work-tree=#{__current__.join('tmp/elasticsearch')} branch --no-color`.split("\n").select { |b| b =~ /^\*/ }.first.gsub(/^\*\s*/, '')
-    begin
+
+    # build_dir = if gitref =~ /master/ || gitref.gsub(/^v(\d\.+)/, '\1').to_f > 1.6
+    #   __current__.join('tmp/elasticsearch/core')
+    # else
+    #   __current__.join('tmp/elasticsearch')
+    # end
+
+    build_command = if gitref =~ /master/ || gitref.gsub(/^v(\d\.+)/, '\1').to_f > 1.6
+      "MAVEN_OPTS=-Xmx1g mvn --projects core,distribution/tar clean package -DskipTests -Dskip.integ.tests;"
+    else
+      "MAVEN_OPTS=-Xmx1g mvn clean package -DskipTests;"
+    end
+
+    if gitref =~ /master/ || gitref.gsub(/^v(\d\.+)/, '\1').to_f > 1.6
       sh <<-CODE
         mkdir -p #{__current__.join('tmp/builds')};
-        rm -rf '#{__current__.join('tmp/elasticsearch/target')}';
+        rm -rf '#{__current__.join('tmp/elasticsearch/distribution/tar/target/')}';
         cd #{__current__.join('tmp/elasticsearch')} && git fetch origin --quiet;
-        cd #{__current__.join('tmp/elasticsearch')} && git checkout #{branch};
-        cd #{__current__.join('tmp/elasticsearch')} && mvn clean package -DskipTests;
+        cd #{__current__.join('tmp/elasticsearch')} && git checkout #{gitref};
+        cd #{__current__.join('tmp/elasticsearch')} && MAVEN_OPTS=-Xmx1g mvn --projects core,distribution/tar clean package -DskipTests -Dskip.integ.tests;
+        build=`ls #{__current__.join('tmp/elasticsearch/distribution/tar/target/releases/elasticsearch-*.tar.gz')} | xargs -0 basename | sed s/\.tar\.gz//` && \
+        rm -rf "#{__current__.join('tmp/builds')}/$build";
+        tar xvf #{__current__.join('tmp/elasticsearch/distribution/tar/target/releases/elasticsearch-*.tar.gz')} -C #{__current__.join('tmp/builds')};
+        echo; echo; echo "Built: $build"
+      CODE
+    else
+      sh <<-CODE
+        mkdir -p #{__current__.join('tmp/builds')};
+        rm -rf '#{__current__.join('tmp/elasticsearch/target/')}';
+        cd #{__current__.join('tmp/elasticsearch')} && git fetch origin --quiet;
+        cd #{__current__.join('tmp/elasticsearch')} && git checkout #{gitref};
+        cd #{__current__.join('tmp/elasticsearch')} && MAVEN_OPTS=-Xmx1g mvn clean package -DskipTests;
         build=`ls #{__current__.join('tmp/elasticsearch/target/releases/elasticsearch-*.tar.gz')} | xargs -0 basename | sed s/\.tar\.gz//` && \
         rm -rf "#{__current__.join('tmp/builds')}/$build";
         tar xvf target/releases/elasticsearch-*.tar.gz -C #{__current__.join('tmp/builds')};
