@@ -32,7 +32,7 @@ module Elasticsearch
       # @see Cluster#stop Cluster.stop
       #
       module Cluster
-        @@network_host    = ENV.fetch('TEST_CLUSTER_NETWORK_HOST', '0.0.0.0')
+        @@network_host    = ENV.fetch('TEST_CLUSTER_NETWORK_HOST', 'localhost')
         @@number_of_nodes = (ENV['TEST_CLUSTER_NODES'] || 2).to_i
         @@default_cluster_name = "elasticsearch-test-#{Socket.gethostname.downcase}"
 
@@ -50,9 +50,11 @@ module Elasticsearch
         # @option arguments [String]  :node_name    The node name (will be appended with a number)
         # @option arguments [String]  :path_data    Path to the directory to store data in
         # @option arguments [String]  :path_work    Path to the directory with auxiliary files
+        # @option arguments [String]  :path_logs    Path to the directory with log files
         # @option arguments [Boolean] :multicast_enabled Whether multicast is enabled (default: true)
         # @option arguments [Integer] :timeout      Timeout when starting the cluster (default: 30)
         # @option arguments [String]  :network_host The host that nodes will bind on and publish to
+        # @option arguments [Boolean] :clear        Wipe out cluster content on startup (default: true)
         #
         # You can also use environment variables to set these options.
         #
@@ -82,10 +84,12 @@ module Elasticsearch
           arguments[:node_name]         ||= ENV.fetch('TEST_CLUSTER_NODE_NAME', 'node')
           arguments[:path_data]         ||= ENV.fetch('TEST_CLUSTER_DATA',      '/tmp/elasticsearch_test')
           arguments[:path_work]         ||= ENV.fetch('TEST_CLUSTER_TMP',       '/tmp')
+          arguments[:path_logs]         ||= ENV.fetch('TEST_CLUSTER_LOGS',      '/var/log/elasticsearch')
           arguments[:es_params]         ||= ENV.fetch('TEST_CLUSTER_PARAMS',    '')
           arguments[:multicast_enabled] ||= ENV.fetch('TEST_CLUSTER_MULTICAST', 'true')
           arguments[:timeout]           ||= (ENV.fetch('TEST_CLUSTER_TIMEOUT', 30).to_i)
           arguments[:network_host]      ||= @@network_host
+          arguments[:clear]             ||= true
 
           # Make sure `cluster_name` is not dangerous
           if arguments[:cluster_name] =~ /^[\/\\]?$/
@@ -98,8 +102,8 @@ module Elasticsearch
             return false
           end
 
-          # Wipe out data for this cluster name
-          FileUtils.rm_rf "#{arguments[:path_data]}/#{arguments[:cluster_name]}"
+          # Wipe out data for this cluster name if requested
+          FileUtils.rm_rf "#{arguments[:path_data]}/#{arguments[:cluster_name]}" if arguments[:clear]
 
           print "Starting ".ansi(:faint) +
                 @@number_of_nodes.to_s.ansi(:bold, :faint) +
@@ -117,13 +121,17 @@ module Elasticsearch
                 -D es.http.port=#{arguments[:port].to_i + (n-1)} \
                 -D es.path.data=#{arguments[:path_data]} \
                 -D es.path.work=#{arguments[:path_work]} \
+                -D es.path.logs=#{arguments[:path_logs]} \
                 -D es.cluster.routing.allocation.disk.threshold_enabled=false \
                 -D es.network.host=#{@@network_host} \
                 -D es.discovery.zen.ping.multicast.enabled=#{arguments[:multicast_enabled]} \
                 -D es.script.inline=on \
                 -D es.script.indexed=on \
                 -D es.node.test=true \
+                -D es.node.testattr=test \
                 -D es.node.bench=true \
+                -D es.path.repo=/tmp \
+                -D es.repositories.url.allowed_urls=http://snapshot.test* \
                 -D es.logger.level=DEBUG \
                 #{arguments[:es_params]} \
                 > /dev/null
