@@ -1,3 +1,52 @@
+## 1.0.14
+
+* Clarified version support of Elasticsearch
+* Improved the `elasticsearch:build` Rake task to work with branch names
+
+### API
+
+* Added support for the `:ignore` option to the "Snapshot and Restore" API
+* Added support for the `:ignore` option to the Status API
+* Added the "Cat Nodeattrs" API
+* Added the "fields" parameter to the Bulk API
+* Added the "Render Search Template" API
+* Added the "Shard Stores" API
+* Added, that document ID is URL-escaped when percolating an existing document
+* Allow passing TEST_CLUSTER_PARAMS to the test cluster
+* Define the path to core REST tests dynamically based on Elasticsearch version
+* Fixed example in "Get Warmer" API
+* Fixed incorrect documentation and link in the "Clear Cache" API
+* Fixed integration tests for the "Snapshot and Restore" API
+* Fixed the incorrect path in "Field Stats" API and added support for the `body` argument
+* Fixed, that `type` is not added both to path and URL parameters in the Bulk API
+* Updated the examples in README and documentation (facets -> aggregations)
+
+### Client
+
+* Added an argument to control clearing out the testing cluster
+* Fixed, that reloading connections works with SSL, authentication and proxy/Shield
+* Highlight the need to set `retry_on_failure` option with multiple hosts in documentation
+
+## DSL:0.1.2
+
+* Added fuzziness option to the "Match" query
+* Added the `format` option to range filter and query
+* Added, that `*args` are passed to the Options initializer
+
+## EXT:0.0.19
+
+* Added `es.path.repo` to the testing cluster
+* Added `path_logs` option to test cluster
+* Added the `testattr` attribute to the testing cluster
+* Changed the default network host for the testing cluster to "localhost", to enable new "multicast"
+
+## 1.0.13
+
+### Client
+
+* Added, that connection reloading supports Elasticsearch 2.0 output
+* Improved thread safety in parts of connection handling code
+
 ## DSL:1.0.1
 
 * Added additional option methods to the "Multi Match" query

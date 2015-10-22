@@ -24,7 +24,8 @@ Turn.config.format = :pretty
 # Launch test cluster
 #
 if ENV['SERVER'] and not Elasticsearch::Extensions::Test::Cluster.running?
-  Elasticsearch::Extensions::Test::Cluster.start(nodes: 1, es_params: "-D es.repositories.url.allowed_urls=http://snapshot.test*")
+  es_params = "-D es.repositories.url.allowed_urls=http://snapshot.test* -D es.path.repo=/tmp -D es.node.testattr=test " + ENV['TEST_CLUSTER_PARAMS']
+  Elasticsearch::Extensions::Test::Cluster.start(nodes: 1, es_params: es_params )
 end
 
 # Register `at_exit` handler for server shutdown.
@@ -274,8 +275,9 @@ end
 
 include Elasticsearch::YamlTestSuite
 
-PATH    = Pathname(ENV['TEST_REST_API_SPEC'] || \
-          File.expand_path('../../../../tmp/elasticsearch/rest-api-spec/test', __FILE__))
+rest_api_test_source = $client.info['version']['number'] < '2' ? '../../../../tmp/elasticsearch/rest-api-spec/test' : '../../../../tmp/elasticsearch/rest-api-spec/src/main/resources/rest-api-spec/test'
+PATH    = Pathname(ENV.fetch('TEST_REST_API_SPEC', File.expand_path(rest_api_test_source, __FILE__)))
+
 suites  = Dir.glob(PATH.join('*')).map { |d| Pathname(d) }
 suites  = suites.select { |s| s.to_s =~ Regexp.new(ENV['FILTER']) } if ENV['FILTER']
 
@@ -289,6 +291,14 @@ suites.each do |suite|
     setup do
       $client.indices.delete index: '_all'
       $client.indices.delete_template name: '*'
+      $client.snapshot.delete repository: 'test_repo_create_1',  snapshot: 'test_snapshot', ignore: 404
+      $client.snapshot.delete repository: 'test_repo_restore_1', snapshot: 'test_snapshot', ignore: 404
+      $client.snapshot.delete_repository repository: 'test_repo_create_1', ignore: 404
+      $client.snapshot.delete_repository repository: 'test_repo_restore_1', ignore: 404
+      # FIXME: This shouldn't be needed -------------
+      FileUtils.rm_rf('/tmp/test_repo_create_1_loc')
+      FileUtils.rm_rf('/tmp/test_repo_restore_1_loc')
+      # ---------------------------------------------
       $results = {}
       $stash   = {}
     end
